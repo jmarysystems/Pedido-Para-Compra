@@ -1,12 +1,24 @@
 // Pedidos de compra: lista, busca, itens, recebimento/NF, edição, exclusão e impressão.
-import { sb, listar, atualizar, excluir } from '../api.js?v=20261119a';
-import * as ui from '../ui.js?v=20261119a';
+import { sb, listar, atualizar, excluir } from '../api.js?v=20261119b';
+import * as ui from '../ui.js?v=20261119b';
 
 const BADGE = {
   gerado: 'Gerado', enviado: 'Enviado', recebido: 'Recebido', cancelado: 'Cancelado',
 };
 
 const SITUACOES = ['gerado', 'enviado', 'recebido', 'cancelado'];
+
+const RECEBIMENTOS = [
+  { valor: 'total', rotulo: 'Recebido total' },
+  { valor: 'parcial', rotulo: 'Recebido parcial' },
+  { valor: 'nao', rotulo: 'Não recebido' },
+];
+
+const rotuloRecebimento = (v) =>
+  ({ total: 'recebido total', parcial: 'recebido parcial' }[v] || 'não recebido');
+
+const badgeRecebimento = (v) =>
+  v === 'total' ? 'badge-ok' : (v === 'parcial' ? 'badge-alerta' : 'badge-neutro');
 
 const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const num = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
@@ -73,8 +85,8 @@ export async function render(raiz, ctx) {
               <h2 style="display:flex;align-items:center;gap:10px">
                 ${ui.esc(p.numero)}
                 <span class="badge">${ui.esc(BADGE[p.status] || p.status || '—')}</span>
-                <span class="badge ${p.recebido ? 'badge-ok' : 'badge-neutro'}">
-                  ${p.recebido ? 'recebido' : 'não recebido'}</span>
+                <span class="badge ${badgeRecebimento(p.recebimento)}">
+                  ${rotuloRecebimento(p.recebimento)}</span>
               </h2>
               <p class="sub" style="margin:6px 0 0">
                 ${ui.esc(fornecedor)} · ${ui.dataBR(p.data_pedido)} · ${itens.length} item(ns) ·
@@ -140,8 +152,8 @@ export async function render(raiz, ctx) {
             SITUACOES.map((s) => ({ valor: s, rotulo: BADGE[s] })), p.status || 'gerado')}
           ${ui.campoTexto('Data do pedido', 'data_pedido', p.data_pedido || '', { tipo: 'date' })}
           ${ui.campoTexto('Nota fiscal', 'nota_fiscal', p.nota_fiscal || '')}
-          <label class="campo"><span>Recebido</span>
-            <input type="checkbox" name="recebido" ${p.recebido ? 'checked' : ''}></label>
+          ${ui.campoSelect('Recebimento', 'recebimento',
+            RECEBIMENTOS, p.recebimento || 'nao', { obrigatorio: true })}
           <label class="campo"><span>Observação</span>
             <input name="observacao" value="${ui.esc(p.observacao || '')}"></label>
 
@@ -151,8 +163,10 @@ export async function render(raiz, ctx) {
               <button type="button" class="botao-pequeno" id="add-item">Adicionar item</button>
             </div>
             <div class="tabela-rolagem"><table id="tabela-itens">
-              <thead><tr><th>SKU</th><th>Descrição</th><th>Qtd</th><th>Un.</th>
-                <th>Custo</th><th class="num">Total</th><th></th></tr></thead>
+              <thead><tr><th>SKU</th><th>Descrição</th>
+                <th>QTD Pedido</th><th>UN Pedido</th><th>CUSTO Pedido</th><th class="num">Total</th>
+                <th>QTD Nota Fiscal</th><th>UN Nota Fiscal</th><th>CUSTO Nota Fiscal</th>
+                <th class="num">Total NF</th><th></th></tr></thead>
               <tbody></tbody>
               <tfoot><tr><th colspan="5">Total do pedido</th>
                 <th class="num" id="total-itens">—</th><th></th></tr></tfoot>
@@ -183,23 +197,31 @@ export async function render(raiz, ctx) {
     function desenharItens() {
       tbody.innerHTML = itens.map((i, idx) => `
         <tr data-i="${idx}">
-          <td><input data-campo="sku" value="${ui.esc(i.sku || '')}" style="width:110px"></td>
-          <td><input data-campo="descricao" value="${ui.esc(i.descricao || '')}"></td>
+          <td><input data-campo="sku" value="${ui.esc(i.sku || '')}" style="width:90px"></td>
+          <td><input data-campo="descricao" value="${ui.esc(i.descricao || '')}" style="min-width:180px"></td>
           <td><input data-campo="quantidade" type="number" step="0.001"
-                     value="${i.quantidade ?? ''}" style="width:90px"></td>
-          <td><input data-campo="unidade" value="${ui.esc(i.unidade || '')}" style="width:70px"></td>
+                     value="${i.quantidade ?? ''}" style="width:80px"></td>
+          <td><input data-campo="unidade" value="${ui.esc(i.unidade || '')}" style="width:60px"></td>
           <td><input data-campo="valor_de_custo_do_fornecedor" type="number" step="0.01"
-                     value="${i.valor_de_custo_do_fornecedor ?? ''}" style="width:110px"></td>
+                     value="${i.valor_de_custo_do_fornecedor ?? ''}" style="width:90px"></td>
           <td class="num">${brl(i.valor_total)}</td>
+          <td><input data-campo="quantidade_nf" type="number" step="0.001"
+                     value="${i.quantidade_nf ?? ''}" style="width:80px"></td>
+          <td><input data-campo="unidade_nf" value="${ui.esc(i.unidade_nf || '')}" style="width:60px"></td>
+          <td><input data-campo="valor_de_custo_nf" type="number" step="0.01"
+                     value="${i.valor_de_custo_nf ?? ''}" style="width:90px"></td>
+          <td class="num">${brl(i.valor_total_nf)}</td>
           <td><button type="button" class="botao-pequeno botao-perigo"
                      data-remover-item="${idx}">×</button></td>
-        </tr>`).join('') || '<tr><td colspan="7">Pedido sem itens.</td></tr>';
+        </tr>`).join('') || '<tr><td colspan="11">Pedido sem itens.</td></tr>';
 
       for (const input of tbody.querySelectorAll('[data-campo]')) {
         input.addEventListener('input', () => {
           const idx = Number(input.closest('tr').dataset.i);
           const campo = input.dataset.campo;
-          itens[idx][campo] = campo === 'quantidade' || campo === 'valor_de_custo_do_fornecedor'
+          const numericos = ['quantidade', 'valor_de_custo_do_fornecedor',
+                             'quantidade_nf', 'valor_de_custo_nf'];
+          itens[idx][campo] = numericos.includes(campo)
             ? (input.value === '' ? null : Number(input.value))
             : input.value;
           recalcular();
@@ -232,7 +254,10 @@ export async function render(raiz, ctx) {
     desenharItens();
 
     corpo.querySelector('#add-item').addEventListener('click', () => {
-      itens.push({ descricao: '', quantidade: 1, unidade: 'UN', valor_de_custo_do_fornecedor: 0 });
+      itens.push({
+        descricao: '', quantidade: 1, unidade: 'UN', valor_de_custo_do_fornecedor: 0,
+        quantidade_nf: null, unidade_nf: 'UN', valor_de_custo_nf: null,
+      });
       desenharItens();
     });
 
@@ -241,7 +266,6 @@ export async function render(raiz, ctx) {
     corpo.querySelector('#form').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const d = ui.dadosDoForm(ev.target);
-      const recebido = ev.target.querySelector('[name="recebido"]').checked;
       const botao = ev.target.querySelector('button[type="submit"]');
       botao.disabled = true;
       botao.textContent = 'Salvando…';
@@ -253,8 +277,7 @@ export async function render(raiz, ctx) {
           data_pedido: d.data_pedido || null,
           nota_fiscal: d.nota_fiscal || null,
           nota_fiscal_em: d.nota_fiscal ? new Date().toISOString() : null,
-          recebido,
-          recebido_em: recebido ? new Date().toISOString() : null,
+          recebimento: d.recebimento || 'nao',
           observacao: d.observacao || null,
         });
 
@@ -264,12 +287,18 @@ export async function render(raiz, ctx) {
 
         for (const i of itens) {
           // valor_total é coluna gerada no banco (qtd × custo)
+          // valor_total e valor_total_nf são colunas geradas no banco
           const dados = {
             sku: i.sku || null,
             descricao: i.descricao || '(sem descrição)',
             quantidade: Number(i.quantidade) || 0,
             unidade: i.unidade || 'UN',
             valor_de_custo_do_fornecedor: Number(i.valor_de_custo_do_fornecedor) || 0,
+            quantidade_nf: i.quantidade_nf === null || i.quantidade_nf === ''
+              ? null : Number(i.quantidade_nf),
+            unidade_nf: i.unidade_nf || null,
+            valor_de_custo_nf: i.valor_de_custo_nf === null || i.valor_de_custo_nf === ''
+              ? null : Number(i.valor_de_custo_nf),
           };
           if (i.id) await sb.from('pedido_itens').update(dados).eq('id', i.id);
           else await sb.from('pedido_itens').insert({ ...dados, pedido_id: p.id });
@@ -337,11 +366,8 @@ export async function render(raiz, ctx) {
     const { fechar, corpo } = ui.modal({
       titulo: `Recebimento / NF — ${p.numero}`,
       corpo: `
-        <label class="campo"><span>Situação</span>
-          <select name="recebido">
-            <option value="nao" ${p.recebido ? '' : 'selected'}>Não recebido</option>
-            <option value="sim" ${p.recebido ? 'selected' : ''}>Recebido</option>
-          </select></label>
+        ${ui.campoSelect('Recebimento', 'recebimento', RECEBIMENTOS,
+          p.recebimento || 'nao', { obrigatorio: true })}
         ${ui.campoTexto('Nota fiscal', 'nota_fiscal', p.nota_fiscal || '', { placeholder: 'número da NF' })}
         <div class="linha-acoes">
           <button type="button" class="botao-primario" id="salvar">Salvar</button>
@@ -351,12 +377,11 @@ export async function render(raiz, ctx) {
 
     corpo.querySelector('#cancelar').addEventListener('click', fechar);
     corpo.querySelector('#salvar').addEventListener('click', async () => {
-      const recebido = corpo.querySelector('[name="recebido"]').value === 'sim';
+      const recebimento = corpo.querySelector('[name="recebimento"]').value;
       const nota = corpo.querySelector('[name="nota_fiscal"]').value.trim();
       try {
         await atualizar('pedidos_gerados', p.id, {
-          recebido,
-          recebido_em: recebido ? new Date().toISOString() : null,
+          recebimento,
           nota_fiscal: nota || null,
           nota_fiscal_em: nota ? new Date().toISOString() : null,
         });

@@ -428,3 +428,5 @@ input[type="checkbox"], input[type="radio"] { width: auto; }
 .lista-usuarios .doc { color: var(--texto-suave); font-size: .8rem; }
 .duas-colunas { display: grid; grid-template-columns: 320px 1fr; gap: 18px; align-items: start; }
 @media (max-width: 860px) { .duas-colunas { grid-template-columns: 1fr; } }
+
+.badge-alerta { background: #fdf3d3; color: #8a6a00; }

@@ -1,6 +1,6 @@
 // Dashboard dos pedidos de compra.
-import { rpc } from '../api.js?v=20261119a';
-import * as ui from '../ui.js?v=20261119a';
+import { rpc } from '../api.js?v=20261119b';
+import * as ui from '../ui.js?v=20261119b';
 
 const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
