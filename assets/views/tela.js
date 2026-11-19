@@ -1,5 +1,5 @@
 // Pedidos de compra: lista, busca, itens, recebimento/NF, edição, exclusão e impressão.
-import { listar, atualizar, excluir } from '../api.js';
+import { sb, listar, atualizar, excluir } from '../api.js';
 import * as ui from '../ui.js';
 
 const BADGE = {
@@ -127,9 +127,12 @@ export async function render(raiz, ctx) {
 
   // ------------------------------------------------------------- editar
   function modalEditar(p) {
+    const itens = (p.pedido_itens || []).map((i) => ({ ...i }));
+    const removidos = [];
+
     const { fechar, corpo } = ui.modal({
       titulo: `Editar pedido — ${p.numero}`,
-      largura: '680px',
+      largura: '960px',
       corpo: `
         <form id="form" class="grade grade-2">
           ${ui.campoTexto('Número', 'numero', p.numero, { obrigatorio: true })}
@@ -139,8 +142,23 @@ export async function render(raiz, ctx) {
           ${ui.campoTexto('Nota fiscal', 'nota_fiscal', p.nota_fiscal || '')}
           <label class="campo"><span>Recebido</span>
             <input type="checkbox" name="recebido" ${p.recebido ? 'checked' : ''}></label>
-          <label class="campo campo-largo"><span>Observação</span>
-            <textarea name="observacao" rows="3">${ui.esc(p.observacao || '')}</textarea></label>
+          <label class="campo"><span>Observação</span>
+            <input name="observacao" value="${ui.esc(p.observacao || '')}"></label>
+
+          <div class="campo-largo" style="margin-top:6px">
+            <div class="cartao-topo" style="margin-bottom:8px">
+              <strong>Itens do pedido</strong>
+              <button type="button" class="botao-pequeno" id="add-item">Adicionar item</button>
+            </div>
+            <div class="tabela-rolagem"><table id="tabela-itens">
+              <thead><tr><th>SKU</th><th>Descrição</th><th>Qtd</th><th>Un.</th>
+                <th>Custo</th><th class="num">Total</th><th></th></tr></thead>
+              <tbody></tbody>
+              <tfoot><tr><th colspan="5">Total do pedido</th>
+                <th class="num" id="total-itens">—</th><th></th></tr></tfoot>
+            </table></div>
+          </div>
+
           <div class="linha-acoes campo-largo">
             <button type="submit" class="botao-primario">Salvar</button>
             <button type="button" id="cancelar">Cancelar</button>
@@ -148,11 +166,86 @@ export async function render(raiz, ctx) {
         </form>`,
     });
 
+    const tbody = corpo.querySelector('#tabela-itens tbody');
+    const totalEl = corpo.querySelector('#total-itens');
+
+    function recalcular() {
+      let total = 0;
+      for (const i of itens) {
+        const qtd = Number(i.quantidade) || 0;
+        const custo = Number(i.valor_de_custo_do_fornecedor) || 0;
+        i.valor_total = Math.round(qtd * custo * 100) / 100;
+        total += i.valor_total;
+      }
+      totalEl.textContent = brl(total);
+    }
+
+    function desenharItens() {
+      tbody.innerHTML = itens.map((i, idx) => `
+        <tr data-i="${idx}">
+          <td><input data-campo="sku" value="${ui.esc(i.sku || '')}" style="width:110px"></td>
+          <td><input data-campo="descricao" value="${ui.esc(i.descricao || '')}"></td>
+          <td><input data-campo="quantidade" type="number" step="0.001"
+                     value="${i.quantidade ?? ''}" style="width:90px"></td>
+          <td><input data-campo="unidade" value="${ui.esc(i.unidade || '')}" style="width:70px"></td>
+          <td><input data-campo="valor_de_custo_do_fornecedor" type="number" step="0.01"
+                     value="${i.valor_de_custo_do_fornecedor ?? ''}" style="width:110px"></td>
+          <td class="num">${brl(i.valor_total)}</td>
+          <td><button type="button" class="botao-pequeno botao-perigo"
+                     data-remover-item="${idx}">×</button></td>
+        </tr>`).join('') || '<tr><td colspan="7">Pedido sem itens.</td></tr>';
+
+      for (const input of tbody.querySelectorAll('[data-campo]')) {
+        input.addEventListener('input', () => {
+          const idx = Number(input.closest('tr').dataset.i);
+          const campo = input.dataset.campo;
+          itens[idx][campo] = campo === 'quantidade' || campo === 'valor_de_custo_do_fornecedor'
+            ? (input.value === '' ? null : Number(input.value))
+            : input.value;
+          recalcular();
+          desenharTotais();
+        });
+      }
+
+      for (const b of tbody.querySelectorAll('[data-remover-item]')) {
+        b.addEventListener('click', () => {
+          const idx = Number(b.dataset.removerItem);
+          const item = itens[idx];
+          if (item && item.id) removidos.push(item.id);
+          itens.splice(idx, 1);
+          recalcular();
+          desenharItens();
+        });
+      }
+
+      recalcular();
+    }
+
+    function desenharTotais() {
+      for (const tr of tbody.querySelectorAll('tr[data-i]')) {
+        const idx = Number(tr.dataset.i);
+        const celulas = tr.querySelectorAll('td');
+        if (celulas[5] && itens[idx]) celulas[5].textContent = brl(itens[idx].valor_total);
+      }
+    }
+
+    desenharItens();
+
+    corpo.querySelector('#add-item').addEventListener('click', () => {
+      itens.push({ descricao: '', quantidade: 1, unidade: 'UN', valor_de_custo_do_fornecedor: 0 });
+      desenharItens();
+    });
+
     corpo.querySelector('#cancelar').addEventListener('click', fechar);
+
     corpo.querySelector('#form').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const d = ui.dadosDoForm(ev.target);
       const recebido = ev.target.querySelector('[name="recebido"]').checked;
+      const botao = ev.target.querySelector('button[type="submit"]');
+      botao.disabled = true;
+      botao.textContent = 'Salvando…';
+
       try {
         await atualizar('pedidos_gerados', p.id, {
           numero: d.numero,
@@ -164,11 +257,33 @@ export async function render(raiz, ctx) {
           recebido_em: recebido ? new Date().toISOString() : null,
           observacao: d.observacao || null,
         });
+
+        for (const id of removidos) {
+          await sb.from('pedido_itens').delete().eq('id', id);
+        }
+
+        for (const i of itens) {
+          // valor_total é coluna gerada no banco (qtd × custo)
+          const dados = {
+            sku: i.sku || null,
+            descricao: i.descricao || '(sem descrição)',
+            quantidade: Number(i.quantidade) || 0,
+            unidade: i.unidade || 'UN',
+            valor_de_custo_do_fornecedor: Number(i.valor_de_custo_do_fornecedor) || 0,
+          };
+          if (i.id) await sb.from('pedido_itens').update(dados).eq('id', i.id);
+          else await sb.from('pedido_itens').insert({ ...dados, pedido_id: p.id });
+        }
+
         fechar();
         ui.toast('Pedido atualizado.');
         selecionado = null;
         ctx.recarregar();
-      } catch (erro) { ui.toast(erro.message, 'erro'); }
+      } catch (erro) {
+        ui.toast(erro.message, 'erro');
+        botao.disabled = false;
+        botao.textContent = 'Salvar';
+      }
     });
   }
 
