@@ -1,7 +1,8 @@
-// Shell: login, layout e rota única.
+// Shell: login, layout e rotas (Dashboard e Pedido de Compra).
 import { sb, sair, sessao, meuPerfil, entrar, minhasPermissoes } from './api.js';
 import { SISTEMA } from './config.js';
 import * as ui from './ui.js';
+import * as dashboard from './views/dashboard.js';
 import * as tela from './views/tela.js';
 
 const app = document.getElementById('app');
@@ -56,7 +57,8 @@ function iniciarApp() {
       <aside class="sidebar">
         <div class="marca"><span class="marca-icone">▣</span>${ui.esc(SISTEMA)}</div>
         <nav>
-          <a class="nav-item ativo" href="#/inicio"><span class="icone">☰</span>${ui.esc(SISTEMA)}</a>
+          <a class="nav-item" href="#/dashboard"><span class="icone">▦</span>Dashboard</a>
+          <a class="nav-item" href="#/pedidos"><span class="icone">☰</span>Pedido de Compra</a>
         </nav>
         <div class="sidebar-rodape">
           <div class="quem">${ui.esc(perfil.nome)}</div>
@@ -65,7 +67,7 @@ function iniciarApp() {
         </div>
       </aside>
       <div class="conteudo">
-        <header class="topbar"><h1 id="titulo">${ui.esc(SISTEMA)}</h1></header>
+        <header class="topbar"><h1 id="titulo">Dashboard</h1></header>
         <main id="view"><div class="carregando">Carregando…</div></main>
       </div>
     </div>`;
@@ -76,6 +78,7 @@ function iniciarApp() {
     telaLogin('Você saiu.');
   });
 
+  if (!location.hash) location.hash = '#/dashboard';
   window.addEventListener('hashchange', navegar);
   navegar();
 }
@@ -83,6 +86,14 @@ function iniciarApp() {
 async function navegar() {
   const raiz = document.getElementById('view');
   if (!raiz) return;
+
+  const caminho = (location.hash || '#/dashboard').replace(/^#\/?/, '');
+  const segmento = caminho.split('/')[0];
+
+  for (const link of document.querySelectorAll('.nav-item')) {
+    const rota = link.getAttribute('href').replace(/^#\//, '').split('/')[0];
+    link.classList.toggle('ativo', rota === segmento);
+  }
 
   const ctx = {
     perfil,
@@ -103,7 +114,8 @@ async function navegar() {
   raiz.innerHTML = '<div class="carregando">Carregando…</div>';
 
   try {
-    return await tela.render(raiz, ctx);
+    if (segmento === 'pedidos') return await tela.render(raiz, ctx);
+    return await dashboard.render(raiz, ctx);
   } catch (erro) {
     raiz.innerHTML = `<div class="cartao"><h2>Não foi possível carregar</h2>
       <p class="sub">${ui.esc(erro.message)}</p></div>`;
