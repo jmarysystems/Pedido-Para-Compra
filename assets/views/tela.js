@@ -1,6 +1,6 @@
 // Pedidos de compra: lista, busca, itens, recebimento/NF, edição, exclusão e impressão.
-import { sb, listar, atualizar, excluir } from '../api.js';
-import * as ui from '../ui.js';
+import { sb, listar, atualizar, excluir } from '../api.js?v=20261119a';
+import * as ui from '../ui.js?v=20261119a';
 
 const BADGE = {
   gerado: 'Gerado', enviado: 'Enviado', recebido: 'Recebido', cancelado: 'Cancelado',

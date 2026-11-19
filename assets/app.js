@@ -1,9 +1,9 @@
 // Shell: login, layout e rotas (Dashboard e Pedido de Compra).
-import { sb, sair, sessao, meuPerfil, entrar, minhasPermissoes } from './api.js';
-import { SISTEMA } from './config.js';
-import * as ui from './ui.js';
-import * as dashboard from './views/dashboard.js';
-import * as tela from './views/tela.js';
+import { sb, sair, sessao, meuPerfil, entrar, minhasPermissoes } from './api.js?v=20261119a';
+import { SISTEMA } from './config.js?v=20261119a';
+import * as ui from './ui.js?v=20261119a';
+import * as dashboard from './views/dashboard.js?v=20261119a';
+import * as tela from './views/tela.js?v=20261119a';
 
 const app = document.getElementById('app');
 let perfil = null;
